@@ -317,7 +317,7 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
 
 <section class="card">
   <h2>Kometa webhook</h2>
-  <p class="desc">Add this under <code>webhooks: run_end:</code> in Kometa's config.yml. Replace <code>SILO_HOST</code> with the address Kometa uses to reach Silo (on Saltbox, the container name and port) and the secret with your webhook secret.</p>
+  <p class="desc">Add this under <code>webhooks: run_end:</code> in Kometa's config.yml. Replace <code>SILO_HOST</code> with the address Kometa uses to reach Silo (the container name and port if they share a Docker network, otherwise the server's address) and the secret with your webhook secret.</p>
   <div class="code"><code id="hook">{{.WebhookURL}}</code><button class="btn btn-outline btn-sm" type="button"
     onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('hook').textContent).then(()=>{this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button></div>
 </section>

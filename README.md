@@ -5,7 +5,7 @@ A Silo plugin that mirrors what Kometa does to Plex into Silo:
 - **Posters** for movies and series, including Kometa's overlays.
 - **Plex collections**, with their posters and members.
 
-It never touches season or episode artwork, so AURA's title cards stay put.
+It never touches season or episode artwork, so title cards from Kometa, TitleCardMaker or any other tool are left alone.
 
 ## How it works
 
@@ -23,7 +23,7 @@ Posters are relayed through the plugin's own short-lived `/img/<random>` route r
 1. In Silo, create an **unscoped admin API key** (it starts with `sa_`).
 2. Download `kometa-sync-linux-amd64` (or `-arm64` on ARM) from the latest [release](../../releases/latest), then in Silo go to Admin → Plugins and upload it.
 3. Open the plugin's settings and fill in:
-   - **Plex URL**: an address the Silo container can reach, e.g. `http://plex:32400` on Saltbox.
+   - **Plex URL**: an address the Silo server can reach Plex at, e.g. `http://plex:32400` if both run in Docker on the same network, or `http://192.168.1.10:32400`.
    - **Plex token**.
    - **Silo admin API key**.
    - **Webhook secret**: any long random string.
@@ -32,10 +32,21 @@ Posters are relayed through the plugin's own short-lived `/img/<random>` route r
 
    ```yaml
    webhooks:
-     run_end: http://silo:PORT/api/v1/plugins/ID/kometa?secret=YOUR_WEBHOOK_SECRET
+     run_end: http://SILO_HOST:PORT/api/v2/plugin-content/plugins/ID/kometa?secret=YOUR_WEBHOOK_SECRET
    ```
 
-   `run_end` accepts a list if you already send it elsewhere. Kometa and Silo share Saltbox's Docker network, so the container name works as the host.
+   Copy the exact URL from the status page, which fills in this installation's id. Replace `SILO_HOST:PORT` with the address Kometa uses to reach Silo: the container name (e.g. `silo:8080`) if Kometa and Silo share a Docker network, otherwise the server's IP or hostname.
+
+   If you already send `run_end` somewhere else, make it a list:
+
+   ```yaml
+   webhooks:
+     run_end:
+       - notifiarr
+       - http://SILO_HOST:PORT/api/v2/plugin-content/plugins/ID/kometa?secret=YOUR_WEBHOOK_SECRET
+   ```
+
+   Watch for stray quote marks around the URL. A trailing `"` becomes part of the secret, and the plugin rejects the webhook. To test it, POST to the URL yourself (`curl -X POST -d '{}' "URL"`); the status page then shows a sync scheduled.
 
 6. Turn on **Dry run** for the first Kometa run if you want to see what it would change. The summary appears on the status page, and Silo's task history shows the same counts for manual runs.
 
@@ -62,7 +73,7 @@ When the same collection name exists in more than one library ("Marvel" in Movie
 
 Silo stores a title that's in both libraries as one item with two versions, so the two collections mostly hold the same titles either way. Switching modes moves existing collections on the next sync: combining keeps the winning library's collection and removes the other; separating gives the combined collection back to that library and creates the rest.
 
-Collection order follows Plex. When Plex's order changes (UMTK and Kometa re-rank lists like Trending every day), the next sync sends Silo the whole new order. In Combined mode the order comes from the copy with the most titles.
+Collection order follows Plex. When Plex's order changes (for example Kometa re-ranking a Trending list), the next sync sends Silo the whole new order. In Combined mode the order comes from the copy with the most titles.
 
 The plugin records each collection as soon as Silo creates it, rebuilds one you delete in Silo, and adopts one it created but lost track of (for example after a restart mid-sync) instead of making a duplicate.
 
@@ -76,7 +87,7 @@ If Silo re-keys a title during a sync (it does this when it matches a show bette
 
 ## The scheduled task
 
-The plugin also registers a **Kometa Poster Sync** task in Silo's task list. That's the "Run now" button. Silo gives plugin tasks a run-at-startup trigger by default, which is cheap because only changed posters are sent. You can switch that trigger to a daily fallback or leave it. The webhook is what keeps it in step with your three Kometa runs a day.
+The plugin also registers a **Kometa Poster Sync** task in Silo's task list. That's the "Run now" button. Silo gives plugin tasks a run-at-startup trigger by default, which is cheap because only changed posters are sent. You can switch that trigger to a daily fallback or leave it. The webhook is what keeps it in step with Kometa, however often you run it.
 
 ## Reverting
 
