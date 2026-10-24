@@ -7,6 +7,16 @@ A Silo plugin that mirrors what Kometa does to Plex into Silo:
 
 It never touches season or episode artwork, so title cards from AURA or any other tool are left alone.
 
+## Requirements
+
+The plugin copies from Plex, so it does nothing on its own. You need:
+
+- **A working Plex Media Server** holding the movie and TV libraries you want mirrored, and a Plex token for it.
+- **Kometa** running against that Plex server. Kometa's overlays are the posters this plugin copies, and its `run_end` webhook is what starts each sync. By default only posters Kometa has labeled `Overlay` are synced.
+- **Silo** on Linux (amd64 or arm64), with admin access so you can install plugins and create an admin API key.
+- **The same titles in both Plex and Silo.** Items are matched by TMDB id, so a movie or show that's in Plex but not in Silo is skipped.
+- **Network access in both directions.** Silo must be able to reach Plex, and Kometa must be able to reach Silo for the webhook.
+
 ## How it works
 
 1. Kometa finishes a run and calls the plugin's webhook (`run_end`).
