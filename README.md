@@ -127,10 +127,6 @@ make test
 - A collection whose items aren't in Silo yet is skipped until they are.
 - Posters over ~3.8 MB are re-encoded to JPEG for the relay.
 
-## Releasing
-
-Change `"version"` in `manifest.json` (and `VERSION` in the Makefile) and push to `main`. GitHub Actions runs the tests, builds both Linux binaries and publishes them as release `v<version>`. You can also start it by hand from the Actions tab ("Release" → "Run workflow"); it does nothing if that version is already released.
-
 ## License
 
 AGPL-3.0-or-later. See [LICENSE](LICENSE). The bundled Plus Jakarta Sans font is under the SIL Open Font License (`assets/OFL-PlusJakartaSans.txt`).
