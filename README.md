@@ -108,7 +108,7 @@ make test
 
 ## Releasing
 
-Push a version tag (`git tag v0.3.4 && git push origin v0.3.4`). GitHub Actions runs the tests, builds both Linux binaries with that version and publishes them as a release.
+Change `"version"` in `manifest.json` (and `VERSION` in the Makefile) and push to `main`. GitHub Actions runs the tests, builds both Linux binaries and publishes them as release `v<version>`. You can also start it by hand from the Actions tab ("Release" → "Run workflow"); it does nothing if that version is already released.
 
 ## License
 
