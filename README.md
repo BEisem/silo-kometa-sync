@@ -5,7 +5,7 @@ A Silo plugin that mirrors what Kometa does to Plex into Silo:
 - **Posters** for movies and series, including Kometa's overlays.
 - **Plex collections**, with their posters and members.
 
-It never touches season or episode artwork, so title cards from Kometa, TitleCardMaker or any other tool are left alone.
+It never touches season or episode artwork, so title cards from AURA or any other tool are left alone.
 
 ## How it works
 
