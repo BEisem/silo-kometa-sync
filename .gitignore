@@ -1,0 +1,5 @@
+dist/
+out/
+vendor/
+*.zip
+status.html

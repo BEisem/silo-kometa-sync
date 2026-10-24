@@ -1,0 +1,48 @@
+name: Release
+
+# Push a tag like v0.3.4 to build both Linux binaries and publish a GitHub
+# release. The tag (minus the "v") becomes the plugin version.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Set version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          jq --arg v "$version" '.version = $v' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+      - name: Resolve modules
+        run: go mod tidy
+
+      - name: Test
+        run: go test -count=1 ./...
+
+      - name: Build
+        run: |
+          make build VERSION="${VERSION}"
+          cd dist && sha256sum kometa-sync-linux-* > checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/kometa-sync-linux-amd64
+            dist/kometa-sync-linux-arm64
+            dist/checksums.txt
+          generate_release_notes: true
