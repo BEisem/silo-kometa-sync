@@ -53,6 +53,9 @@ func resetCollections(ctx context.Context, silo *SiloClient, state *stateStore, 
 			return err
 		}
 		if err := silo.DeleteCollection(ctx, id); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
 			summary.ErrorCount++
 			if len(summary.Errors) < maxErrorMessages {
 				summary.Errors = append(summary.Errors, "delete collection "+id+": "+err.Error())
@@ -89,6 +92,7 @@ func (p *plugin) runReset(ctx context.Context, ids map[string]bool) (*runSummary
 		return nil, errBusy
 	}
 	p.running, p.mode = true, "reset"
+	ctx = p.withStop(ctx)
 	cfg := p.cfg
 	p.mu.Unlock()
 	p.prog.start()
@@ -122,6 +126,9 @@ func (p *plugin) runReset(ctx context.Context, ids map[string]bool) (*runSummary
 		}
 		return resetCollections(ctx, newSiloClient(base, cfg.SiloAPIKey), state, sections, summary, &p.prog)
 	}()
+	if p.endStop() {
+		err = markCancelled(summary, err)
+	}
 	summary.FinishedAt = nowRFC3339()
 	if err != nil {
 		summary.ErrorCount++

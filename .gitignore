@@ -1,5 +1,5 @@
 dist/
 out/
-vendor/
+vendor
 *.zip
 status.html

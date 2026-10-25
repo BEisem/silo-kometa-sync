@@ -1,4 +1,4 @@
-module github.com/BEisem/silo-kometa-sync
+module github.com/BEisem/silo-plex-artwork-sync
 
 go 1.26.0
 

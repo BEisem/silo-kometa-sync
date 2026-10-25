@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Host instance state allows at most 256 keys of 256 KiB each, so the poster
@@ -49,6 +50,7 @@ type runSummary struct {
 	CollectionsUpdated int      `json:"collections_updated"`
 	CollectionsDeleted int      `json:"collections_deleted"`
 	PostersReverted    int      `json:"posters_reverted,omitempty"`
+	Cancelled          bool     `json:"cancelled,omitempty"`
 	Note               string   `json:"note,omitempty"`
 	DuplicatesSkipped  int      `json:"duplicates_skipped,omitempty"`
 	CollectionsChecked int      `json:"collections_checked,omitempty"`
@@ -176,6 +178,10 @@ func (s *stateStore) collectionKeys() []string {
 
 // flush writes back every shard that changed.
 func (s *stateStore) flush(ctx context.Context) error {
+	// Saving must finish even when the run was cancelled; that is what lets
+	// the next run skip the work already done.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
 	for i := range posterShards {
 		if s.dirtyP[i] {
 			if err := s.write(ctx, fmt.Sprintf("posters/%02d", i), s.posters[i]); err != nil {

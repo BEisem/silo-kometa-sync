@@ -43,7 +43,7 @@ func serveAsset(name string) *pluginv1.HandleHTTPResponse {
 const pageHead = `<!doctype html>
 <html lang="en" data-theme="midnight-cinema"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Kometa Poster Sync</title>
+<title>Plex Artwork Sync</title>
 <style>
 @font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-display:swap;font-weight:200 800;
   src:url("assets/plus-jakarta-sans-latin-ext-wght-normal.woff2") format("woff2");
@@ -235,11 +235,12 @@ func thousands(v any) string {
 var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"num": thousands, "when": localTime, "took": took, "pct": pct}).Parse(pageHead + `
 <a class="crumb" href="/admin/plugins/community.kometa-sync">&#8592; Plugin settings</a>
 <div class="head">
-  <div><h1>Kometa Poster Sync</h1><p class="sub">Mirrors Kometa's overlaid Plex posters and collections into Silo.</p></div>
+  <div><h1>Plex Artwork Sync</h1><p class="sub">Keeps Silo's movie and series posters and collections matching Plex.</p></div>
   {{if .Running}}<span class="badge busy"><span class="dot"></span>{{if eq .Mode "revert"}}Reverting{{else if eq .Mode "reset"}}Resetting collections{{else}}Syncing{{end}}</span>
-  {{else if .Due}}<span class="badge warn"><span class="dot"></span>Sync at&nbsp;{{when .Due}}</span>
+  {{else if .Due}}<span style="display:inline-flex;gap:.5rem;align-items:center"><span class="badge warn"><span class="dot"></span>Sync at&nbsp;{{when .Due}}</span>
+    <form method="post" action="cancel" style="margin:0"><input type="hidden" name="token" value="{{.FormToken}}"><button class="btn btn-outline btn-sm" type="submit">Skip</button></form></span>
   {{else if .ConfigError}}<span class="badge bad"><span class="dot"></span>Not configured</span>
-  {{else}}<span class="badge ok"><span class="dot"></span>Waiting for Kometa</span>{{end}}
+  {{else}}<span class="badge ok"><span class="dot"></span>Ready</span>{{end}}
 </div>
 
 {{if .ConfigError}}<div class="callout bad">{{.ConfigError}}</div>{{end}}
@@ -249,7 +250,13 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
     <p class="desc" id="live-detail">{{.Detail}}</p></div>
     <span class="meta" id="live-count">{{if .Total}}{{num .Done}} of {{num .Total}}{{end}}</span></div>
   <div class="progress"><div id="live-bar" style="width:{{pct .Done .Total}}%"></div></div>
-  <p class="meta" style="margin:.75rem 0 0">Started {{when .Started}}. This updates by itself.</p>
+  <div class="cardhead" style="margin:.75rem 0 0;align-items:center">
+    <p class="meta" style="margin:0">Started {{when .Started}}. This updates by itself.</p>
+    <form method="post" action="cancel" onsubmit="return confirm('Stop this run? What it has finished so far is kept.')">
+      <input type="hidden" name="token" value="{{$.FormToken}}">
+      <button class="btn btn-outline btn-sm" type="submit">Cancel</button>
+    </form>
+  </div>
 </section>{{end}}{{end}}
 
 <section class="card">
@@ -295,7 +302,7 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
 <section class="card">
   <h2>Last run</h2>
   {{with .Last}}
-  <p class="desc">{{when .StartedAt}}{{if .FinishedAt}} · took {{took .StartedAt .FinishedAt}}{{end}} · {{.Trigger}}{{if .DryRun}} · dry run (counts show what would change){{end}}</p>
+  <p class="desc">{{when .StartedAt}}{{if .FinishedAt}} · took {{took .StartedAt .FinishedAt}}{{end}} · {{.Trigger}}{{if .DryRun}} · dry run (counts show what would change){{end}}{{if .Cancelled}} · <strong>cancelled</strong>{{end}}</p>
   {{if .Note}}<div class="callout">{{.Note}}</div>{{end}}
   <div class="stats">
     {{if .PostersReverted}}<div class="stat"><div class="n">{{num .PostersReverted}}</div><div class="l">Posters reverted</div></div>{{else}}
@@ -312,11 +319,12 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
   </div>
   {{if .Errors}}<details{{if le (len .Errors) 3}} open{{end}}><summary>Show errors{{if gt .ErrorCount (len .Errors)}} (first {{len .Errors}} of {{.ErrorCount}}){{end}}</summary>
     <ul class="errors">{{range .Errors}}<li>{{.}}</li>{{end}}</ul></details>{{end}}
-  {{else}}<p class="empty">No runs yet. Use Run now on the Kometa Poster Sync task, or wait for Kometa's next run.</p>{{end}}
+  {{else}}<p class="empty">No runs yet. Use Run now on the Plex Artwork Sync task in Silo's scheduled tasks, or wait for Kometa's next run if you use the webhook.</p>{{end}}
 </section>
 
 <section class="card">
-  <h2>Kometa webhook</h2>
+  <h2>Kometa webhook <span class="meta">(optional)</span></h2>
+  <p class="desc">If you use Kometa, this starts a sync after every Kometa run. Without Kometa, give the Plex Artwork Sync task a schedule in Silo's scheduled tasks instead.</p>
   <p class="desc">Add this under <code>webhooks: run_end:</code> in Kometa's config.yml. Replace <code>SILO_HOST</code> with the address Kometa uses to reach Silo (the container name and port if they share a Docker network, otherwise the server's address) and the secret with your webhook secret.</p>
   <div class="code"><code id="hook">{{.WebhookURL}}</code><button class="btn btn-outline btn-sm" type="button"
     onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('hook').textContent).then(()=>{this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button></div>
@@ -324,7 +332,7 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
 
 <section class="card">
   <div class="cardhead"><div><h2>Connection check</h2>
-    <p class="desc">Tests Plex, the Overlay label, the API key and whether Silo can fetch posters from this plugin. Nothing is written.</p></div>
+    <p class="desc">Tests Plex, Kometa's Overlay label (when that setting is on), the API key and whether Silo can fetch posters from this plugin. Nothing is written.</p></div>
     <a class="btn btn-outline btn-sm" href="?check=1">{{if .Checks}}Run again{{else}}Run check{{end}}</a></div>
   {{if .Checks}}<div class="checks">{{range .Checks}}
     <div class="icon"><span class="check {{if .OK}}ok{{else}}bad{{end}}">{{if .OK}}&#10003;{{else}}&#10005;{{end}}</span></div>
@@ -349,7 +357,7 @@ var statusPage = template.Must(template.New("status").Funcs(template.FuncMap{"nu
   <h2>Revert</h2>
   {{if .Tracked}}
   <p class="desc">Puts the posters this plugin applied back to Silo's default and stops tracking them. For each item it removes only the image lock, keeping any other locks you set, then runs Silo's own metadata refresh, a few at a time.</p>
-  <div class="callout">Untick the library under <strong>Libraries</strong> and save first, or the next Kometa run pushes the posters again.</div>
+  <div class="callout">Untick the library under <strong>Libraries</strong> and save first, or the next sync pushes the posters again.</div>
   <form method="post" action="revert">
     <input type="hidden" name="token" value="{{.FormToken}}">
     <table><thead><tr><th style="width:2rem"></th><th>Library</th><th class="num">Posters</th><th class="num">Collections</th></tr></thead><tbody>

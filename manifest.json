@@ -1,65 +1,186 @@
 {
   "plugin_id": "community.kometa-sync",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "checksum": "__CHECKSUM__",
   "silo_api_version": "v1",
   "category": "Artwork",
   "presentation": {
-    "display_name": "Kometa Poster Sync",
-    "summary": "Copies Kometa's overlaid Plex posters and Plex collections into Silo after each Kometa run.",
-    "description_markdown": "Mirrors movie and series posters (with Kometa overlays) and Plex collections into Silo. Season and episode artwork is never touched.",
-    "setup_markdown": "1. Create an admin API key in Silo and paste it into the settings.\n2. Enter your Plex URL and token.\n3. Set a webhook secret, then open the plugin's Status page to choose libraries and copy the webhook URL into Kometa's `webhooks: run_end:` setting.",
+    "display_name": "Plex Artwork Sync",
+    "summary": "Keeps Silo's movie and series posters and collections matching Plex, including Kometa's overlays.",
+    "description_markdown": "Mirrors movie and series posters and Plex collections from Plex into Silo. Works great with Kometa: by default it copies the posters Kometa has overlaid, and Kometa's run_end webhook starts a sync after every Kometa run. Season and episode artwork is never touched.",
+    "setup_markdown": "1. Create an admin API key in Silo and paste it into the settings.\n2. Enter your Plex URL and token, and set a webhook secret.\n3. Open the plugin's status page to choose libraries.\n4. With Kometa, copy the webhook URL from the status page into Kometa's `webhooks: run_end:` setting. Without Kometa, turn off \"Only posters Kometa has overlaid\" and give the Plex Artwork Sync task a schedule.",
     "publisher_name": "Departed69",
     "license_spdx": "AGPL-3.0-or-later"
   },
   "supported_platforms": [
-    { "os": "linux", "arch": "amd64" },
-    { "os": "linux", "arch": "arm64" }
+    {
+      "os": "linux",
+      "arch": "amd64"
+    },
+    {
+      "os": "linux",
+      "arch": "arm64"
+    }
   ],
   "capabilities": [
     {
       "type": "scheduled_task.v1",
       "id": "sync",
-      "display_name": "Kometa Poster Sync",
-      "description": "Syncs overlaid movie/series posters and collections from Plex into Silo. Normally triggered by Kometa's run_end webhook; run it manually here or give it a fallback schedule."
+      "display_name": "Plex Artwork Sync",
+      "description": "Syncs movie/series posters and collections from Plex into Silo. Kometa's run_end webhook can trigger it; you can also run it here or give it a schedule."
     },
     {
       "type": "http_routes.v1",
       "id": "routes",
-      "display_name": "Kometa webhook",
-      "description": "Receives Kometa's run_end webhook and serves posters to Silo during a sync."
+      "display_name": "Webhook and poster relay",
+      "description": "Receives Kometa's run_end webhook, serves the status page, and hands posters to Silo during a sync."
     }
   ],
   "http_routes": [
-    { "id": "kometa-webhook", "method": "POST", "path": "/kometa", "access": "public" },
-    { "id": "image", "method": "GET", "path": "/img/*", "access": "public" },
-    { "id": "assets", "method": "GET", "path": "/assets/*", "access": "public", "static_asset": false },
-    { "id": "libraries", "method": "POST", "path": "/libraries", "access": "admin" },
-    { "id": "revert", "method": "POST", "path": "/revert", "access": "admin" },
-    { "id": "reset-collections", "method": "POST", "path": "/reset-collections", "access": "admin" },
-    { "id": "progress", "method": "GET", "path": "/progress", "access": "admin" },
-    { "id": "status", "method": "GET", "path": "/status", "access": "admin", "navigable": true, "navigation_label": "Kometa Sync Status", "navigation_kind": "admin" }
+    {
+      "id": "kometa-webhook",
+      "method": "POST",
+      "path": "/kometa",
+      "access": "public"
+    },
+    {
+      "id": "image",
+      "method": "GET",
+      "path": "/img/*",
+      "access": "public"
+    },
+    {
+      "id": "assets",
+      "method": "GET",
+      "path": "/assets/*",
+      "access": "public",
+      "static_asset": false
+    },
+    {
+      "id": "libraries",
+      "method": "POST",
+      "path": "/libraries",
+      "access": "admin"
+    },
+    {
+      "id": "revert",
+      "method": "POST",
+      "path": "/revert",
+      "access": "admin"
+    },
+    {
+      "id": "cancel",
+      "method": "POST",
+      "path": "/cancel",
+      "access": "admin"
+    },
+    {
+      "id": "reset-collections",
+      "method": "POST",
+      "path": "/reset-collections",
+      "access": "admin"
+    },
+    {
+      "id": "progress",
+      "method": "GET",
+      "path": "/progress",
+      "access": "admin"
+    },
+    {
+      "id": "status",
+      "method": "GET",
+      "path": "/status",
+      "access": "admin",
+      "navigable": true,
+      "navigation_label": "Plex Artwork Sync",
+      "navigation_kind": "admin"
+    }
   ],
   "global_config_schema": [
     {
       "key": "settings",
-      "title": "Kometa Poster Sync",
+      "title": "Plex Artwork Sync",
       "description": "Connection and sync settings.",
       "required": true,
       "json_schema": "{\"type\":\"object\",\"properties\":{\"plex_url\":{\"type\":\"string\"},\"plex_token\":{\"type\":\"string\"},\"silo_api_key\":{\"type\":\"string\"},\"silo_internal_url\":{\"type\":\"string\"},\"webhook_secret\":{\"type\":\"string\"},\"delay_minutes\":{\"type\":\"number\"},\"only_overlaid\":{\"type\":\"boolean\"},\"sync_collections\":{\"type\":\"boolean\"},\"delete_removed_collections\":{\"type\":\"boolean\"},\"dry_run\":{\"type\":\"boolean\"}},\"required\":[\"plex_url\",\"plex_token\",\"silo_api_key\",\"webhook_secret\"]}",
       "admin_form": {
         "submit_label": "Save",
         "fields": [
-          { "key": "plex_url", "label": "Plex URL", "description": "Address Silo can reach Plex at, e.g. http://plex:32400", "control": "ADMIN_FORM_CONTROL_TEXT", "placeholder": "http://plex:32400", "required": true },
-          { "key": "plex_token", "label": "Plex token", "description": "Required. After saving, Silo shows this field empty; leave it empty to keep the saved token.", "control": "ADMIN_FORM_CONTROL_PASSWORD", "secret": true },
-          { "key": "silo_api_key", "label": "Silo admin API key", "description": "Required. An unscoped admin API key (starts with sa_), used to apply posters and manage collections. After saving, Silo shows this field empty; leave it empty to keep the saved key.", "control": "ADMIN_FORM_CONTROL_PASSWORD", "secret": true },
-          { "key": "silo_internal_url", "label": "Silo internal URL (optional)", "description": "Only needed if auto-detection fails. Silo's own API address as Silo sees it, e.g. http://127.0.0.1:8080", "control": "ADMIN_FORM_CONTROL_TEXT" },
-          { "key": "webhook_secret", "label": "Webhook secret", "description": "Required. Any long random string; Kometa sends it as ?secret= on the webhook URL. After saving, Silo shows this field empty; leave it empty to keep the saved secret.", "control": "ADMIN_FORM_CONTROL_PASSWORD", "secret": true },
-          { "key": "delay_minutes", "label": "Delay after Kometa finishes (minutes)", "description": "Wait this long after Kometa's run_end webhook before syncing.", "control": "ADMIN_FORM_CONTROL_NUMBER", "default_value": 5, "validation": { "has_min": true, "min": 0, "has_max": true, "max": 240 } },
-          { "key": "only_overlaid", "label": "Only posters with Kometa overlays", "description": "When on, only items Kometa labeled \"Overlay\" in Plex are synced.", "control": "ADMIN_FORM_CONTROL_SWITCH", "default_value": true },
-          { "key": "sync_collections", "label": "Sync Plex collections", "control": "ADMIN_FORM_CONTROL_SWITCH", "default_value": true },
-          { "key": "delete_removed_collections", "label": "Delete Silo collections removed from Plex", "description": "Only collections this plugin created are ever deleted.", "control": "ADMIN_FORM_CONTROL_SWITCH", "default_value": true },
-          { "key": "dry_run", "label": "Dry run", "description": "Log what would change without writing anything to Silo.", "control": "ADMIN_FORM_CONTROL_SWITCH", "default_value": false }
+          {
+            "key": "plex_url",
+            "label": "Plex URL",
+            "description": "Address Silo can reach Plex at, e.g. http://plex:32400",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "http://plex:32400",
+            "required": true
+          },
+          {
+            "key": "plex_token",
+            "label": "Plex token",
+            "description": "Required. After saving, Silo shows this field empty; leave it empty to keep the saved token.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          },
+          {
+            "key": "silo_api_key",
+            "label": "Silo admin API key",
+            "description": "Required. An unscoped admin API key (starts with sa_), used to apply posters and manage collections. After saving, Silo shows this field empty; leave it empty to keep the saved key.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          },
+          {
+            "key": "silo_internal_url",
+            "label": "Silo internal URL (optional)",
+            "description": "Only needed if auto-detection fails. Silo's own API address as Silo sees it, e.g. http://127.0.0.1:8080",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          },
+          {
+            "key": "webhook_secret",
+            "label": "Webhook secret",
+            "description": "Required. Any long random string. Kometa (or anything else calling the webhook) sends it as ?secret= on the webhook URL. After saving, Silo shows this field empty; leave it empty to keep the saved secret.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          },
+          {
+            "key": "delay_minutes",
+            "label": "Delay after the webhook (minutes)",
+            "description": "Wait this long after Kometa's run_end webhook before syncing. Doesn't affect scheduled or manual runs.",
+            "control": "ADMIN_FORM_CONTROL_NUMBER",
+            "default_value": 5,
+            "validation": {
+              "has_min": true,
+              "min": 0,
+              "has_max": true,
+              "max": 240
+            }
+          },
+          {
+            "key": "only_overlaid",
+            "label": "Only posters Kometa has overlaid",
+            "description": "When on, only items carrying Kometa's \"Overlay\" label in Plex are synced. Turn off to sync every movie and series poster in the selected libraries.",
+            "control": "ADMIN_FORM_CONTROL_SWITCH",
+            "default_value": true
+          },
+          {
+            "key": "sync_collections",
+            "label": "Sync Plex collections",
+            "control": "ADMIN_FORM_CONTROL_SWITCH",
+            "default_value": true
+          },
+          {
+            "key": "delete_removed_collections",
+            "label": "Delete Silo collections removed from Plex",
+            "description": "Only collections this plugin created are ever deleted.",
+            "control": "ADMIN_FORM_CONTROL_SWITCH",
+            "default_value": true
+          },
+          {
+            "key": "dry_run",
+            "label": "Dry run",
+            "description": "Log what would change without writing anything to Silo.",
+            "control": "ADMIN_FORM_CONTROL_SWITCH",
+            "default_value": false
+          }
         ]
       }
     }

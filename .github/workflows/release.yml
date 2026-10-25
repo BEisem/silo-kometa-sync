@@ -42,7 +42,7 @@ jobs:
           go mod tidy
           go test -count=1 ./...
           make build VERSION="${{ steps.version.outputs.version }}"
-          cd dist && sha256sum kometa-sync-linux-* > checksums.txt
+          cd dist && sha256sum plex-artwork-sync-linux-* > checksums.txt
 
       - name: Publish release
         if: steps.version.outputs.skip != 'true'
@@ -52,7 +52,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: v${{ steps.version.outputs.version }}
           files: |
-            dist/kometa-sync-linux-amd64
-            dist/kometa-sync-linux-arm64
+            dist/plex-artwork-sync-linux-amd64
+            dist/plex-artwork-sync-linux-arm64
             dist/checksums.txt
           generate_release_notes: true

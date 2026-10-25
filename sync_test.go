@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/png"
 	"io"
@@ -170,6 +171,7 @@ type fakeSilo struct {
 	reorders  int
 	refreshed []string
 	jobPolls  map[string]int
+	onApply   func() // called after each poster Silo accepts
 }
 
 func (f *fakeSilo) pos(collection string) map[string]int {
@@ -244,6 +246,9 @@ func (f *fakeSilo) handler(t *testing.T) http.Handler {
 			data, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			f.applied[parts[2]] = string(data)
+			if f.onApply != nil {
+				f.onApply()
+			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = io.WriteString(w, `{}`)
 		case r.Method == http.MethodGet && path == "/admin/collections":
@@ -1639,5 +1644,79 @@ func TestCollectionOrderFollowsPlex(t *testing.T) {
 	}
 	if !slices.Equal(mine, want("6", "1", "2", "3", "4")) {
 		t.Fatalf("fallback order = %v", got)
+	}
+}
+
+func TestCancelledSyncKeepsProgress(t *testing.T) {
+	cat := &fakeCatalog{byType: map[string]map[string]runtimehost.MediaPresence{
+		"movie": {"100": {MediaID: "mv-a", LibraryID: "3"}, "200": {MediaID: "mv-b", LibraryID: "3"}},
+		"tv":    {"300": {MediaID: "sr-s", LibraryID: "4"}},
+	}}
+	h := newHarness(t, cat)
+	h.plex.collections = false
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	applies := 0
+	h.silo.onApply = func() { // cancel while the second poster is being applied
+		if applies++; applies == 2 {
+			cancel()
+		}
+	}
+
+	st, _ := loadState(context.Background(), h.state)
+	sum := &runSummary{}
+	s := &syncer{cfg: Config{OnlyOverlaid: true}, catalog: h.cat,
+		plex: newPlexClient(h.plexS.URL, "plex-token"), silo: newSiloClient(h.siloS.URL, "sa_admin"),
+		relay: h.silo.routes.p.relay, relayURL: h.siloS.URL + "/api/v1/plugins/7/img/", state: st,
+		log: func(string, ...any) {}, summary: sum, progress: &syncProgress{}}
+	err := s.run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("run should report cancellation, got %v", err)
+	}
+	if sum.ErrorCount != 0 {
+		t.Fatalf("cancellation should not count as errors: %v", sum.Errors)
+	}
+	if sum.PostersApplied < 1 || sum.PostersApplied == 3 {
+		t.Fatalf("expected a partial run, applied %d", sum.PostersApplied)
+	}
+	if markCancelled(sum, err) != nil || !sum.Cancelled {
+		t.Fatal("markCancelled should swallow the cancellation and flag the run")
+	}
+
+	// The next run skips what the cancelled one finished.
+	first := sum.PostersApplied
+	h.silo.onApply = nil
+	again := h.run()
+	if again.PostersApplied != 3-first || again.ErrorCount != 0 {
+		t.Fatalf("resumed run applied %d (want %d), errors %v", again.PostersApplied, 3-first, again.Errors)
+	}
+}
+
+func TestCancelEndpoint(t *testing.T) {
+	p := &plugin{relay: newImageRelay(), formToken: "tok", log: hclog.NewNullLogger()}
+	r := &routesServer{p: p}
+	post := func(body string) int {
+		resp, _ := r.Handle(context.Background(), &pluginv1.HandleHTTPRequest{Method: "POST", Path: "/cancel", Body: []byte(body)})
+		return int(resp.GetStatusCode())
+	}
+	if code := post("token=wrong"); code != http.StatusForbidden {
+		t.Fatalf("bad token: %d", code)
+	}
+	if code := post("token=tok"); code != http.StatusOK {
+		t.Fatalf("nothing running: %d", code)
+	}
+	p.mu.Lock()
+	p.running = true
+	ctx := p.withStop(context.Background())
+	p.rerun = true
+	p.mu.Unlock()
+	if code := post("token=tok"); code != http.StatusAccepted {
+		t.Fatalf("cancel running: %d", code)
+	}
+	if ctx.Err() == nil || p.rerun {
+		t.Fatal("cancel should stop the run and drop the queued rerun")
+	}
+	if !p.endStop() {
+		t.Fatal("endStop should report the cancellation")
 	}
 }

@@ -95,7 +95,7 @@ func (p *PlexClient) newRequest(ctx context.Context, path string, query url.Valu
 	req.Header.Set("X-Plex-Token", p.token)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Client-Identifier", "silo-kometa-sync")
-	req.Header.Set("X-Plex-Product", "Silo Kometa Poster Sync")
+	req.Header.Set("X-Plex-Product", "Silo Plex Artwork Sync")
 	return req, nil
 }
 

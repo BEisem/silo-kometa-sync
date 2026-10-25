@@ -1,6 +1,7 @@
-// Command kometa-sync is a Silo plugin that mirrors Kometa's overlaid Plex
-// posters (movies and series only) and Plex collections into Silo. It runs
-// when Kometa's run_end webhook arrives, after a configurable delay.
+// Command plex-artwork-sync is a Silo plugin that mirrors Plex posters
+// (movies and series only, by default the ones Kometa has overlaid) and Plex
+// collections into Silo. It runs when Kometa's run_end webhook arrives, after
+// a configurable delay, or on the schedule given to its task in Silo.
 package main
 
 import (
@@ -45,6 +46,9 @@ type plugin struct {
 	rerun   bool   // a webhook arrived during a run
 	lastRun *runSummary
 
+	stop      context.CancelFunc // cancels the current run
+	cancelled bool               // the current run was cancelled from the status page
+
 	revertProg revertProgress
 	prog       syncProgress
 	formToken  string // guards the revert form against cross-site posts
@@ -52,7 +56,7 @@ type plugin struct {
 
 func main() {
 	p := &plugin{
-		log:   hclog.New(&hclog.LoggerOptions{Name: "kometa-sync", Output: os.Stderr, JSONFormat: true}),
+		log:   hclog.New(&hclog.LoggerOptions{Name: "plex-artwork-sync", Output: os.Stderr, JSONFormat: true}),
 		relay: newImageRelay(),
 		cfg:   defaultConfig(),
 	}
@@ -161,6 +165,7 @@ func (p *plugin) runSync(ctx context.Context, trigger string) (*runSummary, erro
 	p.running = true
 	p.mode = "sync"
 	p.rerun = false
+	ctx = p.withStop(ctx)
 	if p.timer != nil {
 		p.timer.Stop()
 		p.timer = nil
@@ -172,6 +177,9 @@ func (p *plugin) runSync(ctx context.Context, trigger string) (*runSummary, erro
 	p.prog.start()
 	summary := &runSummary{StartedAt: nowRFC3339(), Trigger: trigger, DryRun: cfg.DryRun}
 	err := p.doSync(ctx, cfg, summary)
+	if p.endStop() {
+		err = markCancelled(summary, err)
+	}
 	summary.FinishedAt = nowRFC3339()
 	if err != nil {
 		summary.ErrorCount++
@@ -320,6 +328,8 @@ func (r *routesServer) Handle(_ context.Context, req *pluginv1.HandleHTTPRequest
 		return jsonResponse(http.StatusOK, r.p.progressView()), nil
 	case req.GetMethod() == http.MethodPost && path == "/reset-collections":
 		return r.resetCollectionsForm(req), nil
+	case req.GetMethod() == http.MethodPost && path == "/cancel":
+		return r.cancelForm(req), nil
 	case req.GetMethod() == http.MethodPost && path == "/revert":
 		return r.revert(req), nil
 	case req.GetMethod() == http.MethodGet && path == "/status":

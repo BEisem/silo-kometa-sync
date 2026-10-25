@@ -36,6 +36,7 @@ func (p *plugin) runRevert(ctx context.Context, sections map[string]bool, delete
 	}
 	p.running = true
 	p.mode = "revert"
+	ctx = p.withStop(ctx)
 	cfg := p.cfg
 	p.mu.Unlock()
 	p.prog.start()
@@ -60,6 +61,9 @@ func (p *plugin) runRevert(ctx context.Context, sections map[string]bool, delete
 		r := &reverter{silo: newSiloClient(base, cfg.SiloAPIKey), state: state, progress: &p.revertProg, log: p.logf, summary: summary}
 		return r.run(ctx, sections, deleteCollections)
 	}()
+	if p.endStop() {
+		err = markCancelled(summary, err)
+	}
 	summary.FinishedAt = nowRFC3339()
 	if err != nil {
 		summary.ErrorCount++

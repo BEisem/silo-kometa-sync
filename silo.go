@@ -216,7 +216,7 @@ func (s *SiloClient) CreateCollection(ctx context.Context, title, slug string, l
 		"slug":            slug,
 		"library_ids":     libraryIDs,
 		"collection_type": "manual",
-		"description":     "Synced from Plex by Kometa Poster Sync.",
+		"description":     "Synced from Plex by Plex Artwork Sync.",
 	}, &out)
 	if err != nil {
 		return "", err

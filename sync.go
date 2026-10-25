@@ -53,6 +53,9 @@ type syncer struct {
 }
 
 func (s *syncer) addError(format string, args ...any) {
+	if isCancellation(args) {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.summary.ErrorCount++
@@ -158,11 +161,12 @@ func (s *syncer) run(ctx context.Context) error {
 	}
 	migration := "winner:" + policy
 	forceShared := !s.state.migrated(ctx, migration)
-	if err := s.applyPosters(ctx, s.pickPosters(cands, unlabeled, forceShared)); err != nil {
-		return err
-	}
+	applyErr := s.applyPosters(ctx, s.pickPosters(cands, unlabeled, forceShared))
 	if err := s.state.flush(ctx); err != nil {
 		return err
+	}
+	if applyErr != nil {
+		return applyErr
 	}
 	if forceShared && !s.cfg.DryRun && s.summary.ErrorCount == 0 {
 		if err := s.state.markMigrated(ctx, migration); err != nil {

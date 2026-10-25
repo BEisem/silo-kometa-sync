@@ -89,6 +89,9 @@ type reverter struct {
 }
 
 func (r *reverter) addError(format string, args ...any) {
+	if isCancellation(args) {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.summary.ErrorCount++
